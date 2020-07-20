@@ -109,10 +109,10 @@ if (!file.exists(paste0(wd_dev,'/us_places.geojson'))) {
     unzip(paste0(filedir,basename(state_shp)), exdir= filedir)
   }
   list.files(path = filedir)
-  us_tracts <- st_read(fs::dir_ls(filedir, regexp = "\\.shp$")[1])
+  us_places <- st_read(fs::dir_ls(filedir, regexp = "\\.shp$")[1])
   for (f in fs::dir_ls(filedir, regexp = "\\.shp$")[-1] ) {
     state_sf <- st_read(f)
-    us_tracts <- rbind(us_tracts, state_sf)
+    us_places <- rbind(us_places, state_sf)
   }
   st_write(us_places, paste0(wd_dev,'/','us_places.geojson'))
 } else {us_places <- st_read(paste0(wd_dev,'/','us_places.geojson'))}
