@@ -100,7 +100,7 @@ us_tracts <- us_tracts %>%
 
 # Unzip and download Census Place shapefiles for each state
 if (!file.exists(paste0(wd_dev,'/us_places.geojson'))) {
-  filedir <- paste0(tempdir(), '/tracts/')
+  filedir <- paste0(tempdir(), '/places/')
   unlink(filedir, recursive = TRUE)
   dir.create(filedir)
   for (s in state_fips) {
