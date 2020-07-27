@@ -15,6 +15,16 @@ wd_dev <- '/Users/nm/Desktop/projects/work/mansueto/census'
 # census_api_key('API KEY', install = TRUE) 
 readRenviron("~/.Renviron")
 
+
+state_xwalk <- as.data.frame(fips_codes) %>%
+  rename(state_fips = state_code,
+         state_codes = state,
+         county_name = county) %>%
+  mutate(county_fips = paste0(state_fips,county_code))
+state_fips <- unique(state_xwalk$state_fips)[1:51]
+state_codes <- unique(state_xwalk$state_codes)[1:51]
+
+
 # Prepare geographic shapefiles and crosswalks -------------------------------------------
 
 # Unzip and download Census Block shapefiles for each state
