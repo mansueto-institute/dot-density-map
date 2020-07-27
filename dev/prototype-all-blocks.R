@@ -44,7 +44,7 @@ if (!file.exists(paste0(wd_dev,'/us_blocks.geojson'))) {
     us_blocks <- rbind(us_blocks, state_sf)
   }
   st_write(us_blocks, paste0(wd_dev,'/','us_blocks.geojson'))
-} else {us_tracts <- st_read(paste0(wd_dev,'/','us_blocks.geojson'))}
+} else {us_blocks <- st_read(paste0(wd_dev,'/','us_blocks.geojson'))}
 
 ## Clean up columns, select relevant features, convert FIPS to character, pad FIPS with leading zeroes, filter to states+DC
 us_blocks <- us_blocks %>% 
