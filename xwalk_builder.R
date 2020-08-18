@@ -228,5 +228,3 @@ st_write(us_states, paste0(wd_dev,'/delineations/','state_delineations.geojson')
 st_write(us_cbsa, paste0(wd_dev,'/delineations/','cbsa_delineations.geojson'))
 st_write(us_places, paste0(wd_dev,'/delineations/','place_delineations.geojson'))
 
-  
-  st_as_sf()
