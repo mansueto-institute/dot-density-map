@@ -10,16 +10,17 @@ library(readxl)
 library(viridis)
 library(scales)
 
-# Working directory
-wd_dev <- '/Users/nm/Desktop/projects/work/mansueto/xwalks'
+# Create directory and load Census API key --------------------------------
+# Obtain Census API Key here: https://api.census.gov/data/key_signup.html
 
+wd_dev <- '/Users/nm/Desktop/projects/work/mansueto/xwalks'
 dir.create(paste0(wd_dev,'/intermediary'))
 dir.create(paste0(wd_dev,'/delineations'))
-# Obtain Census API Key here: https://api.census.gov/data/key_signup.html
 # census_api_key('API KEY', install = TRUE) 
 readRenviron("~/.Renviron")
 
-# Load state codes and FIPS from tidycensus
+# States ------------------------------------------------------------------
+
 state_xwalk <- as.data.frame(fips_codes) %>%
   rename(state_fips = state_code,
          state_codes = state,
@@ -28,7 +29,6 @@ state_xwalk <- as.data.frame(fips_codes) %>%
 state_fips <- unique(state_xwalk$state_fips)[1:51]
 state_codes <- unique(state_xwalk$state_codes)[1:51]
 
-# State Delineations
 us_states <- get_acs(year = 2018, geography = "state", variables = "B01003_001", geometry = TRUE, keep_geo_vars = TRUE, shift_geo = TRUE)
 
 us_states <- us_states %>%
@@ -37,7 +37,8 @@ us_states <- us_states %>%
          state_fips = geoid)%>%
   mutate_at(vars(state_fips),list(as.character)) %>%
   mutate(state_fips = str_pad(state_fips, width=2, side="left", pad="0")) %>%
-  select(state_fips, population)
+  select(state_fips, population) %>%
+  rename(state_population = population)
 
 us_states <- left_join(us_states, 
                        state_xwalk %>% 
@@ -48,7 +49,8 @@ us_states <- left_join(us_states,
   st_transform(crs = st_crs(4326)) %>% 
   st_as_sf()
 
-# County-CBSA Crosswalk
+# Counties ----------------------------------------------------------------
+
 xwalk_url <- 'https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/2020/delineation-files/list1_2020.xls'
 tmp_filepath <- paste0(tempdir(), '/', basename(xwalk_url))
 download.file(url = paste0(xwalk_url), destfile = tmp_filepath)
@@ -62,7 +64,6 @@ cbsa_xwalk <- cbsa_xwalk %>%
          area_type = metropolitan_micropolitan_statistical_area) %>%
   select(county_fips,cbsa_fips,cbsa_title,area_type,central_outlying_county) 
 
-# County Delineations
 us_county <- get_acs(year = 2018, geography = "county", variables = "B01003_001", geometry = TRUE, keep_geo_vars = TRUE, shift_geo = TRUE)
 us_county <- us_county %>%
   rename_all(list(tolower)) %>%
@@ -73,7 +74,6 @@ us_county <- us_county %>%
 # ggplot(us_county, aes(fill = log(county_population), color = log(county_population))) +
 #   geom_sf() + scale_fill_viridis() + scale_color_viridis() 
 
-# Join state xwalk and CBSA xwalk to county population shapefile
 us_county <- us_county %>% 
   left_join(., cbsa_xwalk, by = c('county_fips'='county_fips') ) %>%
   left_join(., state_xwalk, by = c('county_fips'='county_fips') ) %>%
@@ -87,12 +87,24 @@ us_county <- us_county %>%
   st_transform(crs = st_crs(4326)) %>% 
   st_as_sf()
 
-# CBSA Delineations
+# CBSAs -------------------------------------------------------------------
+
 cbsa_url <- 'https://www2.census.gov/geo/tiger/TIGER2019/CBSA/tl_2019_us_cbsa.zip'
 tmp_filepath <- paste0(tempdir(), '/', basename(cbsa_url))
 download.file(url = paste0(cbsa_url), destfile = tmp_filepath)
 unzip(tmp_filepath, exdir=tempdir())
 us_cbsa <- sf::st_read(gsub(".zip", ".shp", tmp_filepath))
+
+cbsa_pop_url <- 'https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/metro/totals/cbsa-est2019-alldata.csv'
+tmp_filepath <- paste0(tempdir(), '/', basename(cbsa_pop_url))
+download.file(url = paste0(cbsa_pop_url), destfile = tmp_filepath)
+cbsa_pop <- read_csv(tmp_filepath)
+
+cbsa_pop <- cbsa_pop %>%
+  rename_all(tolower) %>% 
+  filter(lsad %in% c('Metropolitan Statistical Area','Micropolitan Statistical Area')) %>%
+  select(cbsa,popestimate2019) %>%
+  mutate(cbsa = str_pad(cbsa, width=5, side="left", pad="0"))
 
 us_cbsa <- us_cbsa %>% 
   rename_all(tolower) %>%
@@ -103,7 +115,14 @@ us_cbsa <- us_cbsa %>%
   st_transform(crs = st_crs(4326)) %>% 
   st_as_sf()
 
-# Tract Delineations
+us_cbsa <- inner_join(us_cbsa,
+                     cbsa_pop,
+                     by = c('geoid'='cbsa')) %>%
+  st_transform(crs = st_crs(4326)) %>% 
+  st_as_sf()
+
+# Tracts ------------------------------------------------------------------
+
 if (!file.exists(paste0(wd_dev,'/delineations/us_tracts.geojson'))) {
   filedir <- paste0(tempdir(), '/tracts/')
   unlink(filedir, recursive = TRUE)
@@ -133,7 +152,8 @@ us_tracts <- us_tracts %>%
   st_transform(crs = st_crs(4326)) %>% 
   st_as_sf()
 
-# Block Group Delineations
+# Block Groups ------------------------------------------------------------
+
 if (!file.exists(paste0(wd_dev,'/delineations/','us_blockgroups.geojson'))) {
   filedir <- paste0(tempdir(), '/blocks/')
   unlink(filedir, recursive = TRUE)
@@ -164,7 +184,8 @@ us_blocks <- us_blocks %>%
   st_transform(crs = st_crs(4326)) %>% 
   st_as_sf()
 
-# Place Delineations
+# Places ------------------------------------------------------------------
+
 if (!file.exists(paste0(wd_dev,'/delineations/','us_places.geojson'))) {
   filedir <- paste0(tempdir(), '/places/')
   unlink(filedir, recursive = TRUE)
@@ -214,17 +235,19 @@ us_places <- inner_join(us_places,
   st_transform(crs = st_crs(4326)) %>% 
   st_as_sf()
 
-# Remove Junk Files
+# Write GeoJSONs ----------------------------------------------------------
+
+rm(cbsa_pop)
 rm(places_pop)
 rm(cbsa_xwalk)
 rm(full_xwalk)
 rm(state_sf)
 rm(state_xwalk)
 
-st_write(us_blocks, paste0(wd_dev,'/delineations/','blockgroup_delineations.geojson'))
-st_write(us_tracts, paste0(wd_dev,'/delineations/','tract_delineations.geojson'))
-st_write(us_county, paste0(wd_dev,'/delineations/','county_delineations.geojson'))
-st_write(us_states, paste0(wd_dev,'/delineations/','state_delineations.geojson'))
-st_write(us_cbsa, paste0(wd_dev,'/delineations/','cbsa_delineations.geojson'))
-st_write(us_places, paste0(wd_dev,'/delineations/','place_delineations.geojson'))
+st_write(us_blocks, paste0(wd_dev,'/delineations/','blockgroup_delineations.geojson'), delete_dsn = FALSE)
+st_write(us_tracts, paste0(wd_dev,'/delineations/','tract_delineations.geojson'), delete_dsn = TRUE)
+st_write(us_county, paste0(wd_dev,'/delineations/','county_delineations.geojson'), delete_dsn = TRUE)
+st_write(us_states, paste0(wd_dev,'/delineations/','state_delineations.geojson'), delete_dsn = TRUE)
+st_write(us_cbsa, paste0(wd_dev,'/delineations/','cbsa_delineations.geojson'), delete_dsn = TRUE)
+st_write(us_places, paste0(wd_dev,'/delineations/','place_delineations.geojson'), delete_dsn = TRUE)
 
